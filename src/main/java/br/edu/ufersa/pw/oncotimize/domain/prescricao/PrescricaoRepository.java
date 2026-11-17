@@ -1,5 +1,9 @@
 package br.edu.ufersa.pw.oncotimize.domain.prescricao;
 
+import br.edu.ufersa.pw.oncotimize.domain.protocolo.Aplicacao;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.Predicate;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
@@ -55,13 +59,29 @@ public interface PrescricaoRepository
                                            @Param("fim") LocalDate fim, @Param("status") StatusPrescricao status);
 
     /**
-     * Filtros opcionais: null ignora o critério. Specification em vez de
-     * "(:p is null or ...)", que o Postgres rejeita (tipo do parâmetro indeterminado).
+     * Filtros opcionais: null ignora o critério. {@code data} é o dia da prescrição na rotina:
+     * <ul>
+     *   <li>APTO com aplicação: a data agendada da aplicação, o mesmo de {@link #buscarDoDia}. A lista do dia mostra os
+     *       pacientes que a otimização usa, também depois de uma remarcação (que muda só a data agendada);</li>
+     *   <li>NAO_APTO, ou legado sem aplicação: a data da prescrição. O não apto fica no dia em que foi avaliado; quando
+     *       a aplicação é remarcada, ele volta com outra prescrição na data nova, e as duas não se misturam.</li>
+     * </ul>
+     * Specification em vez de "(:p is null or ...)", que o Postgres rejeita (tipo do parâmetro indeterminado).
      */
     default Page<Prescricao> buscar(LocalDate data, UUID medicamentoId, Pageable pageable) {
-        Specification<Prescricao> filtro = (root, query, cb) -> cb.and(
-                data == null ? cb.conjunction() : cb.equal(root.get("dataPrescricao"), data),
-                medicamentoId == null ? cb.conjunction() : cb.equal(root.get("medicamento").get("id"), medicamentoId));
+        Specification<Prescricao> filtro = (root, query, cb) -> {
+            Predicate porDia = cb.conjunction();
+            if (data != null) {
+                Join<Prescricao, Aplicacao> aplicacao = root.join("aplicacao", JoinType.LEFT);
+                Predicate apto = cb.equal(root.get("status"), StatusPrescricao.APTO);
+                Predicate temAplicacao = cb.isNotNull(aplicacao.get("id"));
+                porDia = cb.or(
+                        cb.and(apto, temAplicacao, cb.equal(aplicacao.get("dataAgendada"), data)),
+                        cb.and(cb.or(cb.not(apto), cb.not(temAplicacao)), cb.equal(root.get("dataPrescricao"), data)));
+            }
+            return cb.and(porDia,
+                    medicamentoId == null ? cb.conjunction() : cb.equal(root.get("medicamento").get("id"), medicamentoId));
+        };
         return findAll(filtro, pageable);
     }
 }
