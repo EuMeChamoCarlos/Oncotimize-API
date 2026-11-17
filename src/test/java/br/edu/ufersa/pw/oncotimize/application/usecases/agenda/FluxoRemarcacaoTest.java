@@ -10,13 +10,21 @@ import br.edu.ufersa.pw.oncotimize.application.usecases.otimizacao.OtimizarDiaUs
 import br.edu.ufersa.pw.oncotimize.application.usecases.otimizacao.RecusarOtimizacaoUseCase;
 import br.edu.ufersa.pw.oncotimize.application.usecases.prescricao.CriarPrescricaoUseCase;
 import br.edu.ufersa.pw.oncotimize.domain.agenda.SugestaoRemarcacao;
+import br.edu.ufersa.pw.oncotimize.domain.agenda.SugestaoRemarcacaoRepository;
+import br.edu.ufersa.pw.oncotimize.application.usecases.protocolo.ListarAplicacoesDoDiaUseCase;
+import java.math.BigDecimal;
+import org.springframework.data.domain.Pageable;
 import br.edu.ufersa.pw.oncotimize.domain.exception.EstadoInvalidoException;
+import br.edu.ufersa.pw.oncotimize.domain.exception.RecursoNaoEncontradoException;
+import br.edu.ufersa.pw.oncotimize.domain.exception.SemDiaDeRetornoException;
+import br.edu.ufersa.pw.oncotimize.domain.protocolo.StatusAplicacao;
 import br.edu.ufersa.pw.oncotimize.domain.frascos.Frascos;
 import br.edu.ufersa.pw.oncotimize.domain.frascos.FrascosRepository;
 import br.edu.ufersa.pw.oncotimize.domain.medicamento.Medicamento;
 import br.edu.ufersa.pw.oncotimize.domain.medicamento.MedicamentoRepository;
 import br.edu.ufersa.pw.oncotimize.domain.otimizacao.Otimizacao;
 import br.edu.ufersa.pw.oncotimize.domain.otimizacao.StatusOtimizacao;
+import br.edu.ufersa.pw.oncotimize.domain.prescricao.Prescricao;
 import br.edu.ufersa.pw.oncotimize.domain.prescricao.StatusPrescricao;
 import br.edu.ufersa.pw.oncotimize.domain.protocolo.Aplicacao;
 import br.edu.ufersa.pw.oncotimize.domain.protocolo.ProtocoloPaciente;
@@ -51,6 +59,9 @@ class FluxoRemarcacaoTest {
     @Autowired private AceitarSugestaoUseCase aceitarSugestao;
     @Autowired private RecusarSugestaoUseCase recusarSugestao;
     @Autowired private CriarPrescricaoUseCase criarPrescricao;
+    @Autowired private SugestaoRemarcacaoRepository sugestaoRepository;
+    @Autowired private ListarAplicacoesDoDiaUseCase listarAplicacoesDoDia;
+    @Autowired private PreverSugestoesUseCase preverSugestoes;
     @Autowired private OtimizarDiaUseCase otimizarDia;
     @Autowired private RecusarOtimizacaoUseCase recusarOtimizacao;
     @Autowired private ConfirmarOtimizacaoUseCase confirmarOtimizacao;
@@ -81,6 +92,9 @@ class FluxoRemarcacaoTest {
 
         aceitarSugestao.executar(s.getId(), "enfermeira@teste", null);
 
+        // A agenda do dia (GET /api/aplicacoes?data=) já mostra a aplicação no dia novo e não mais no de origem.
+        assertThat(listarAplicacoesDoDia.executar(GRUPO, Pageable.unpaged()).getContent()).contains(naoApto);
+        assertThat(listarAplicacoesDoDia.executar(ORIGEM, Pageable.unpaged()).getContent()).doesNotContain(naoApto);
         assertThat(s.getStatus()).isEqualTo(SugestaoRemarcacao.Status.ACEITA);
         assertThat(s.getDecididaPor()).isEqualTo("enfermeira@teste");
         assertThat(naoApto.getDataAgendada()).isEqualTo(GRUPO);
@@ -88,6 +102,96 @@ class FluxoRemarcacaoTest {
         assertThat(naoApto.getMotivoAlteracao()).contains("imunidade baixa");
         assertThatThrownBy(() -> recusarSugestao.executar(s.getId(), "enfermeira@teste", null))
                 .isInstanceOf(EstadoInvalidoException.class).hasMessageContaining("ACEITA");
+    }
+
+    /** Retorno de não apto aceito fica fixo para a agenda: o planejador não o devolve ao dia em que estava inapto. */
+    @Test
+    void agendaNaoMoveORetornoDeNaoApto() {
+        Medicamento outro = medicamentoRepository.save(Medicamento.builder("Teste retorno fixo").build());
+        frascosRepository.save(new Frascos(outro, 300.0, 190.0, 20, null));
+        frascosRepository.save(new Frascos(outro, 100.0, 70.0, 20, null));
+        frascosRepository.save(new Frascos(outro, 30.0, 25.0, 20, null));
+        // X (175 mg) tem janela de ±2 dias; Y (260 mg) fica em 03/03. Separados custam 140 + 190 = 330; juntos, 310.
+        // Sem a trava, a agenda levaria X de volta a 03/03, o dia em que ele estava inapto.
+        Aplicacao x = protocoloRepository.save(ProtocoloPaciente.novo("PTC9999-000046", "TAX", null, ORIGEM, 1, 21, 0, 2, 2,
+                List.of(new MedicamentoNovo(outro, 175.0, "IV", "D1")))).getAplicacoes().get(0);
+        protocoloRepository.save(ProtocoloPaciente.novo("PTC9999-000047", "TAX", null, ORIGEM, 1, 21, 0, 0, 0,
+                List.of(new MedicamentoNovo(outro, 260.0, "IV", "D1"))));
+
+        SugestaoRemarcacao volta = sugerirRemarcacao.executar(x.getId(), ORIGEM.plusDays(1), "imunidade baixa");
+        aceitarSugestao.executar(volta.getId(), "enfermeira@teste", null);
+        assertThat(x.getDataAgendada()).isEqualTo(ORIGEM.plusDays(1));
+
+        assertThat(preverSugestoes.executar(outro.getId(), ORIGEM.minusDays(2), ORIGEM.plusDays(3)).sugestoes())
+                .noneMatch(s -> s.aplicacaoId().equals(x.getId()));
+    }
+
+    /** Lacuna (b): registrar o não apto tira o paciente da otimização do dia, sem esperar o aceite da sugestão. */
+    @Test
+    void naoAptoSaiDaOtimizacaoDoDiaEFicaRegistradoNoDiaDaAvaliacao() {
+        // Emitida na véspera, para a aplicação de 03/03: a otimização de 03/03 conta o paciente.
+        Prescricao linha = criarPrescricao.executar(new PrescricaoRequest("PRE9999-000042", pac.getId(), 175.0,
+                StatusPrescricao.APTO, ORIGEM.minusDays(1), naoApto.getId()));
+        assertThat(otimizarDia.executar(pac.getId(), ORIGEM).getAlocacoes()).isNotEmpty();
+
+        sugerirRemarcacao.executar(naoApto.getId(), MINIMA, "imunidade baixa");
+
+        assertThat(linha.getStatus()).isEqualTo(StatusPrescricao.NAO_APTO);
+        assertThat(linha.getDataPrescricao()).isEqualTo(ORIGEM.minusDays(1)); // a data de emissão não muda
+        assertThat(linha.getDoseMg()).isEqualTo(175.0);
+        assertThatThrownBy(() -> otimizarDia.executar(pac.getId(), ORIGEM))
+                .isInstanceOf(RecursoNaoEncontradoException.class);
+    }
+
+    /** O plano gerado antes do não apto não pode mais ser confirmado: daria baixa no frasco de quem não está apto. */
+    @Test
+    void planoGeradoAntesDoNaoAptoNaoPodeSerConfirmado() {
+        criarPrescricao.executar(new PrescricaoRequest("PRE9999-000044", pac.getId(), 175.0, StatusPrescricao.APTO,
+                ORIGEM, naoApto.getId()));
+        Otimizacao plano = otimizarDia.executar(pac.getId(), ORIGEM);
+
+        sugerirRemarcacao.executar(naoApto.getId(), MINIMA, "imunidade baixa");
+
+        assertThatThrownBy(() -> confirmarOtimizacao.executar(plano.getId()))
+                .isInstanceOf(EstadoInvalidoException.class).hasMessageContaining("não está mais apta");
+        assertThat(naoApto.getStatus()).isEqualTo(StatusAplicacao.AGENDADA);
+    }
+
+    /** Sem dia de retorno possível, o 422 sai, mas o não apto fica registrado (é decisão médica). */
+    @Test
+    void semDiaDeRetornoONaoAptoFicaRegistrado() {
+        // Três aplicações a cada 7 dias com intervalo mínimo de 7: nenhum dia entre 04/03 e 18/03 serve.
+        Aplicacao primeira = protocoloRepository.save(ProtocoloPaciente.novo("PTC9999-000045", "TAX W", null, ORIGEM, 3, 7,
+                7, 0, 0, List.of(new MedicamentoNovo(pac, 80.0, "IV", "D1")))).getAplicacoes().get(0);
+        Prescricao linha = criarPrescricao.executar(new PrescricaoRequest("PRE9999-000045", pac.getId(), 80.0,
+                StatusPrescricao.APTO, ORIGEM, primeira.getId()));
+        // Sugestão antiga da agenda ainda pendente: aceita depois, marcaria o retorno antes da data mínima.
+        SugestaoRemarcacao antiga = sugestaoRepository.save(
+                SugestaoRemarcacao.daAgenda(primeira, ORIGEM.plusDays(1), BigDecimal.TEN));
+
+        assertThatThrownBy(() -> sugerirRemarcacao.executar(primeira.getId(), ORIGEM.plusDays(1), "imunidade baixa"))
+                .isInstanceOf(SemDiaDeRetornoException.class).hasMessageContaining("registrado como não apto");
+        assertThat(linha.getStatus()).isEqualTo(StatusPrescricao.NAO_APTO);
+        assertThat(antiga.getStatus()).isEqualTo(SugestaoRemarcacao.Status.EXPIRADA);
+    }
+
+    /** No AC, um medicamento com preparo confirmado no dia: o frasco já foi aberto, o não apto não cabe mais. */
+    @Test
+    void naoAptoComPreparoJaConfirmadoNoDiaERecusado() {
+        Medicamento ciclo = medicamentoRepository.save(Medicamento.builder("Teste remarcação ciclo").build());
+        frascosRepository.save(new Frascos(ciclo, 1000.0, 30.0, 20, null));
+        Aplicacao ac = protocoloRepository.save(ProtocoloPaciente.novo("PTC9999-000042", "AC", null, ORIGEM, 1, 21, 0, 0, 0,
+                List.of(new MedicamentoNovo(pac, 100.0, "IV", "D1"), new MedicamentoNovo(ciclo, 1000.0, "IV", "D1"))))
+                .getAplicacoes().get(0);
+        criarPrescricao.executar(new PrescricaoRequest("PRE9999-000043", pac.getId(), 100.0, StatusPrescricao.APTO, ORIGEM,
+                ac.getId()));
+        Prescricao linhaCiclo = criarPrescricao.executar(new PrescricaoRequest("PRE9999-000043", ciclo.getId(), 1000.0,
+                StatusPrescricao.APTO, ORIGEM, ac.getId()));
+        confirmarOtimizacao.executar(otimizarDia.executar(pac.getId(), ORIGEM).getId());
+
+        assertThatThrownBy(() -> sugerirRemarcacao.executar(ac.getId(), MINIMA, "imunidade baixa"))
+                .isInstanceOf(EstadoInvalidoException.class).hasMessageContaining("preparo confirmado");
+        assertThat(linhaCiclo.getStatus()).isEqualTo(StatusPrescricao.APTO);
     }
 
     @Test

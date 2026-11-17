@@ -1,5 +1,7 @@
 package br.edu.ufersa.pw.oncotimize.application.usecases.agenda;
 
+import br.edu.ufersa.pw.oncotimize.domain.agenda.SugestaoRemarcacao;
+import br.edu.ufersa.pw.oncotimize.domain.agenda.SugestaoRemarcacaoRepository;
 import br.edu.ufersa.pw.oncotimize.domain.exception.PeriodoInvalidoException;
 import br.edu.ufersa.pw.oncotimize.domain.exception.RecursoNaoEncontradoException;
 import br.edu.ufersa.pw.oncotimize.domain.frascos.FrascosRepository;
@@ -60,18 +62,21 @@ public class PreverSugestoesUseCase {
     private final PrescricaoRepository prescricaoRepository;
     private final FrascosRepository frascosRepository;
     private final OtimizacaoRepository otimizacaoRepository;
+    private final SugestaoRemarcacaoRepository sugestaoRepository;
 
     public PreverSugestoesUseCase(
             MedicamentoRepository medicamentoRepository,
             ProtocoloPacienteRepository protocoloRepository,
             PrescricaoRepository prescricaoRepository,
             FrascosRepository frascosRepository,
-            OtimizacaoRepository otimizacaoRepository) {
+            OtimizacaoRepository otimizacaoRepository,
+            SugestaoRemarcacaoRepository sugestaoRepository) {
         this.medicamentoRepository = medicamentoRepository;
         this.protocoloRepository = protocoloRepository;
         this.prescricaoRepository = prescricaoRepository;
         this.frascosRepository = frascosRepository;
         this.otimizacaoRepository = otimizacaoRepository;
+        this.sugestaoRepository = sugestaoRepository;
     }
 
     @Transactional(readOnly = true)
@@ -121,6 +126,11 @@ public class PreverSugestoesUseCase {
         Map<UUID, List<Prescricao>> linhasPorAplicacao = aplicacaoIds.isEmpty() ? Map.of()
                 : prescricaoRepository.findByAplicacaoIdIn(aplicacaoIds).stream()
                         .collect(Collectors.groupingBy(p -> p.getAplicacao().getId()));
+        // Retorno de não apto aceito: a data veio de uma decisão médica (data mínima), que a aplicação não guarda.
+        // A agenda não a move mais (podia devolver o paciente ao dia em que estava inapto); ela segue como demanda.
+        Set<UUID> voltaDeNaoApto = aplicacaoIds.isEmpty() ? Set.of()
+                : new HashSet<>(sugestaoRepository.aplicacoesCom(aplicacaoIds,
+                        SugestaoRemarcacao.Tipo.NAO_APTO, SugestaoRemarcacao.Status.ACEITA));
 
         List<AplicacaoPlanejada> aplicacoes = new ArrayList<>();
         for (ProtocoloPaciente protocolo : protocolos.values()) {
@@ -136,7 +146,8 @@ public class PreverSugestoesUseCase {
                 Map<UUID, Double> doses = naoApto ? Map.of() : doses(a, linhas, medicamentos);
                 aplicacoes.add(new AplicacaoPlanejada(a.getId(), protocolo.getId(), protocolo.getCodigoProtocolo(),
                         a.getNumero(), doses, a.getDataAgendada(), a.inicioJanela(), a.fimJanela(),
-                        protocolo.getIntervaloMinimoDias(), a.getStatus() == StatusAplicacao.AGENDADA && !doses.isEmpty()));
+                        protocolo.getIntervaloMinimoDias(),
+                        a.getStatus() == StatusAplicacao.AGENDADA && !doses.isEmpty() && !voltaDeNaoApto.contains(a.getId())));
             }
         }
 
