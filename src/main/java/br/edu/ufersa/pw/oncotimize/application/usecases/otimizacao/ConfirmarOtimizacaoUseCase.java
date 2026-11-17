@@ -12,6 +12,7 @@ import br.edu.ufersa.pw.oncotimize.domain.otimizacao.OtimizacaoRepository;
 import br.edu.ufersa.pw.oncotimize.domain.otimizacao.StatusOtimizacao;
 import br.edu.ufersa.pw.oncotimize.domain.prescricao.Prescricao;
 import br.edu.ufersa.pw.oncotimize.domain.prescricao.PrescricaoRepository;
+import br.edu.ufersa.pw.oncotimize.domain.prescricao.StatusPrescricao;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -59,6 +60,11 @@ public class ConfirmarOtimizacaoUseCase {
                 otimizacao.getMedicamento().getId(), otimizacao.getDataReferencia(), StatusOtimizacao.CONFIRMADA)) {
             throw new RecursoDuplicadoException("Confirmação", "medicamento e data",
                     otimizacao.getDataReferencia().toString());
+        }
+        // Paciente que virou não apto depois de o plano ser gerado: o frasco só se abre para paciente apto.
+        if (otimizacao.getAlocacoes().stream().anyMatch(a -> a.getPrescricao().getStatus() != StatusPrescricao.APTO)) {
+            throw new EstadoInvalidoException("Otimização", otimizacaoId,
+                    "o plano inclui prescrição que não está mais apta; otimize de novo");
         }
 
         // Baixa o frasco inteiro aberto (a sobra é descarte): quantidade por apresentação.
