@@ -12,11 +12,17 @@ import org.springframework.security.core.userdetails.UserDetails;
 import br.edu.ufersa.pw.oncotimize.domain.otimizacao.Otimizacao;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
+import org.springframework.data.web.PagedModel;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.support.ServletUriComponentsBuilder;
 
+import java.time.LocalDate;
 import java.util.UUID;
 
 @RestController
@@ -37,6 +43,16 @@ public class OtimizacaoController {
                 .buildAndExpand(criada.getId())
                 .toUri();
         return ResponseEntity.created(location).body(OtimizacaoResponse.fromOtimizacao(criada));
+    }
+
+    /** Planos de um medicamento num dia, o mais recente primeiro; lista vazia se ainda não houve otimização. */
+    @GetMapping
+    public ResponseEntity<PagedModel<OtimizacaoResponse>> listar(
+            @RequestParam UUID medicamentoId,
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate data,
+            @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
+        return ResponseEntity.ok(new PagedModel<>(buscarOtimizacaoUseCase.listar(medicamentoId, data, pageable)
+                .map(OtimizacaoResponse::fromOtimizacao)));
     }
 
     @GetMapping("/{otimizacaoId}")
