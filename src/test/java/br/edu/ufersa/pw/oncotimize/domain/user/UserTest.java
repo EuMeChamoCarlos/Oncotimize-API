@@ -11,9 +11,7 @@ class UserTest {
 
     @Test
     void shouldExposeSecurityDetailsFromUserState() {
-        Auth auth = new Auth();
-        auth.setUsername("admin@oncotimize.com");
-        auth.setPassword("encoded-password");
+        Auth auth = new Auth("admin@oncotimize.com", "encoded-password");
 
         Role role = new Role();
         role.setName("ADMIN");

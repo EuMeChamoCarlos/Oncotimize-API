@@ -1,7 +1,6 @@
 package br.edu.ufersa.pw.oncotimize.application.usecases.user;
 
 import br.edu.ufersa.pw.oncotimize.application.api.user.dto.UserRegistrationRequest;
-import br.edu.ufersa.pw.oncotimize.domain.auth.Auth;
 import br.edu.ufersa.pw.oncotimize.domain.auth.AuthService;
 import br.edu.ufersa.pw.oncotimize.domain.exception.DocumentoInvalidoException;
 import br.edu.ufersa.pw.oncotimize.domain.exception.RecursoDuplicadoException;
@@ -66,20 +65,13 @@ public class RegistrarUsuarioUseCase {
             }
         }
 
-        Auth authRequest = new Auth();
-        authRequest.setUsername(sanitizedUsername);
-        authRequest.setPassword(request.getPassword());
-        newUser.setAuth(authRequest);
-
         // Registro público nasce sempre USER; ADMIN só via UPDATE manual no banco.
         String roleName = RoleType.ROLE_USER.getName();
         Role role = roleRepository.findByName(roleName)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Role", roleName));
         newUser.setRole(role);
 
-        Auth auth = authService.createAuth(
-                newUser.getAuth().getUsername(), newUser.getAuth().getPassword());
-        newUser.setAuth(auth);
+        newUser.setAuth(authService.createAuth(sanitizedUsername, request.getPassword()));
 
         return userRepository.save(newUser);
     }

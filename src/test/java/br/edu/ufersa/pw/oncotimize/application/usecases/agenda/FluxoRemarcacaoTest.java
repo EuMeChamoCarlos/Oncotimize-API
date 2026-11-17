@@ -130,11 +130,6 @@ class FluxoRemarcacaoTest {
     }
 
     private void frasco(double volume, double custo) {
-        Frascos frasco = new Frascos();
-        frasco.setMedicamento(pac);
-        frasco.setVolumeMg(volume);
-        frasco.setCusto(custo);
-        frasco.setQuantidadeEstoque(20);
-        frascosRepository.save(frasco);
+        frascosRepository.save(new Frascos(pac, volume, custo, 20, null));
     }
 }

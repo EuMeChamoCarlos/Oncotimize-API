@@ -1,21 +1,26 @@
 package br.edu.ufersa.pw.oncotimize.domain.otimizacao;
 
 import br.edu.ufersa.pw.oncotimize.domain.exception.EstadoInvalidoException;
+import br.edu.ufersa.pw.oncotimize.domain.frascos.Frascos;
 import br.edu.ufersa.pw.oncotimize.domain.medicamento.Medicamento;
+import br.edu.ufersa.pw.oncotimize.domain.prescricao.Prescricao;
 import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Objects;
 import java.util.UUID;
 
 @Getter
-@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "otimizacao")
 public class Otimizacao {
@@ -62,6 +67,25 @@ public class Otimizacao {
     @Column(name = "motivo_recusa", length = 500)
     private String motivoRecusa;
 
+    /** Plano do dia recém-calculado pelo solver: nasce CONCLUIDA, sem alocações. */
+    public Otimizacao(Medicamento medicamento, LocalDate dataReferencia, BigDecimal custoTotal,
+                      Double desperdicioMg, BigDecimal economiaVsEmpirico) {
+        this.medicamento = Objects.requireNonNull(medicamento, "medicamento");
+        this.dataReferencia = Objects.requireNonNull(dataReferencia, "dataReferencia");
+        this.custoTotal = Objects.requireNonNull(custoTotal, "custoTotal");
+        this.desperdicioMg = Objects.requireNonNull(desperdicioMg, "desperdicioMg");
+        this.economiaVsEmpirico = Objects.requireNonNull(economiaVsEmpirico, "economiaVsEmpirico");
+    }
+
+    /** O agregado cria os próprios filhos: nenhuma alocação existe fora de um plano. */
+    public void adicionarAlocacao(Prescricao prescricao, Frascos apresentacao, int numeroFrasco, double fracao) {
+        alocacoes.add(new AlocacaoFrasco(this, prescricao, apresentacao, numeroFrasco, fracao));
+    }
+
+    public List<AlocacaoFrasco> getAlocacoes() {
+        return Collections.unmodifiableList(alocacoes);
+    }
+
     public boolean isConfirmada() {
         return status == StatusOtimizacao.CONFIRMADA;
     }
@@ -86,6 +110,9 @@ public class Otimizacao {
 
     /** Preparo feito: a baixa de estoque é responsabilidade de quem confirma (use case). */
     public void confirmar() {
+        if (isRecusada()) {
+            throw new EstadoInvalidoException("Otimização", id, "plano recusado; otimize de novo");
+        }
         this.status = StatusOtimizacao.CONFIRMADA;
         // Milissegundos: a resposta da 1ª confirmação (memória) e da repetição (banco) saem idênticas.
         this.confirmadaEm = LocalDateTime.now().truncatedTo(ChronoUnit.MILLIS);

@@ -40,10 +40,8 @@ public class AtualizarFrascoUseCase {
                     "já usado em otimização; só o estoque pode mudar (cadastre outro frasco para novo volume/custo)");
         }
 
-        frasco.setVolumeMg(request.getVolumeMg());
-        frasco.setCusto(request.getCusto());
-        frasco.setQuantidadeEstoque(request.getQuantidadeEstoque());
-        frasco.setDescricaoTasy(request.getDescricaoTasy());
+        frasco.redefinirApresentacao(request.getVolumeMg(), request.getCusto(), request.getDescricaoTasy());
+        frasco.ajustarEstoque(request.getQuantidadeEstoque());
         return frasco;
     }
 }
