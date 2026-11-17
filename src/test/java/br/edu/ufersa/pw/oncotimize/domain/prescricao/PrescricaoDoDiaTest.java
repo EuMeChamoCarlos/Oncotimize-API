@@ -15,6 +15,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Pageable;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
@@ -58,6 +59,33 @@ class PrescricaoDoDiaTest {
                 .containsExactly("PRE9999-000001", "PRE9999-000002");
         assertThat(prescricaoRepository.buscarDoDia(med.getId(), DIA.minusDays(5), StatusPrescricao.APTO)).isEmpty();
         assertThat(prescricaoRepository.existsByAplicacaoProtocoloId(protocolo.getId())).isTrue();
+    }
+
+    /** GET /api/prescricoes?data= mostra os mesmos pacientes que a otimização usa (a tela do plano do dia depende disso). */
+    @Test
+    void listagemPorDataUsaODiaDePreparoComoOSolver() {
+        Medicamento med = medicamentoRepository.save(Medicamento.builder("Teste listagem do dia").build());
+        ProtocoloPaciente protocolo = protocolo("PTC9999-000004", med);
+        Aplicacao primeira = protocolo.getAplicacoes().get(0);  // agendada 01/01/2030
+        Aplicacao segunda = protocolo.getAplicacoes().get(1);   // agendada 22/01/2030
+
+        salvar("PRE9999-000031", med, StatusPrescricao.APTO, DIA.minusDays(5), primeira); // entra: agendada no dia
+        salvar("PRE9999-000032", med, StatusPrescricao.APTO, DIA, null);                  // entra: legado no dia
+        salvar("PRE9999-000033", med, StatusPrescricao.NAO_APTO, DIA, null);              // entra: a lista não filtra status
+        // Não apto avaliado em 01/01 cuja aplicação foi remarcada para 22/01: fica no dia da avaliação; o paciente
+        // volta em 22/01 com outra prescrição (APTO), que segue a data agendada.
+        salvar("PRE9999-000035", med, StatusPrescricao.NAO_APTO, DIA, segunda);
+        salvar("PRE9999-000034", med, StatusPrescricao.APTO, segunda.getDataAgendada(), segunda); // fora: agendada em 22/01
+
+        assertThat(prescricaoRepository.buscar(DIA, med.getId(), Pageable.unpaged()))
+                .extracting(Prescricao::getCodigoPrescricao)
+                .containsExactlyInAnyOrder("PRE9999-000031", "PRE9999-000032", "PRE9999-000033", "PRE9999-000035");
+        assertThat(prescricaoRepository.buscar(segunda.getDataAgendada(), med.getId(), Pageable.unpaged()))
+                .extracting(Prescricao::getCodigoPrescricao)
+                .containsExactly("PRE9999-000034");
+        assertThat(prescricaoRepository.buscar(DIA.minusDays(5), med.getId(), Pageable.unpaged())).isEmpty();
+        // Sem data, o filtro de dia não entra e a lista traz as cinco linhas do medicamento.
+        assertThat(prescricaoRepository.buscar(null, med.getId(), Pageable.unpaged())).hasSize(5);
     }
 
     /** Como no AC: o mesmo código e a mesma aplicação, uma linha por quimioterápico. */
