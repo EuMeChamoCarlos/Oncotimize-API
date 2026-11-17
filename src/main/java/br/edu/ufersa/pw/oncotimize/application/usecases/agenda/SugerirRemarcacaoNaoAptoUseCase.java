@@ -101,8 +101,10 @@ public class SugerirRemarcacaoNaoAptoUseCase {
             throw new EstadoInvalidoException("Aplicação", aplicacaoId, "não tem quimioterápico intravenoso no dia");
         }
 
-        // Validações feitas: o não apto vale daqui em diante, ache-se ou não um dia de retorno.
+        // Validações feitas: o não apto vale daqui em diante, ache-se ou não um dia de retorno. As sugestões pendentes
+        // da aplicação expiram já aqui: no 422 sem dia, uma antiga aceita marcaria o retorno antes da data mínima.
         aptas.forEach(Prescricao::marcarNaoApto);
+        sugestaoRepository.expirarPendentes(aplicacaoId, null);
 
         Cenario cenario = preverSugestoes.montarCenario(Set.copyOf(doses.keySet()), dataMinima, ate);
         List<AplicacaoPlanejada> outras = cenario.aplicacoes().stream()
@@ -124,7 +126,6 @@ public class SugerirRemarcacaoNaoAptoUseCase {
                         "nenhum dia possível entre " + dataMinima + " e " + ate
                                 + " (intervalo mínimo com as vizinhas ou estoque); o paciente ficou registrado como não apto"));
 
-        sugestaoRepository.expirarPendentes(aplicacaoId, null);
         return sugestaoRepository.save(SugestaoRemarcacao.deNaoApto(aplicacao, melhor.destino(),
                 BigDecimal.valueOf(melhor.ganho()).setScale(4, RoundingMode.HALF_UP), motivo));
     }
