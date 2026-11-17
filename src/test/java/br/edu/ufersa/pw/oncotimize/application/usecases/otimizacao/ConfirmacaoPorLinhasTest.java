@@ -104,11 +104,6 @@ class ConfirmacaoPorLinhasTest {
     }
 
     private void frasco(Medicamento medicamento, double volume, double custo) {
-        Frascos frasco = new Frascos();
-        frasco.setMedicamento(medicamento);
-        frasco.setVolumeMg(volume);
-        frasco.setCusto(custo);
-        frasco.setQuantidadeEstoque(20);
-        frascosRepository.save(frasco);
+        frascosRepository.save(new Frascos(medicamento, volume, custo, 20, null));
     }
 }

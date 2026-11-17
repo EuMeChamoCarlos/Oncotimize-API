@@ -6,7 +6,6 @@ import br.edu.ufersa.pw.oncotimize.domain.frascos.Frascos;
 import br.edu.ufersa.pw.oncotimize.domain.frascos.FrascosRepository;
 import br.edu.ufersa.pw.oncotimize.domain.medicamento.Medicamento;
 import br.edu.ufersa.pw.oncotimize.domain.medicamento.MedicamentoRepository;
-import br.edu.ufersa.pw.oncotimize.domain.otimizacao.AlocacaoFrasco;
 import br.edu.ufersa.pw.oncotimize.domain.otimizacao.Otimizacao;
 import br.edu.ufersa.pw.oncotimize.domain.otimizacao.OtimizacaoRepository;
 import br.edu.ufersa.pw.oncotimize.domain.prescricao.Prescricao;
@@ -75,20 +74,11 @@ public class OtimizarDiaUseCase {
         BigDecimal custoOtimizado = dinheiro(solucao.custoTotal());
         BigDecimal custoSemCompartilhar = dinheiro(SolverFracionamento.custoSemCompartilhamento(doses, tipos));
 
-        Otimizacao otimizacao = new Otimizacao();
-        otimizacao.setMedicamento(medicamento);
-        otimizacao.setDataReferencia(data);
-        otimizacao.setCustoTotal(custoOtimizado);
-        otimizacao.setDesperdicioMg(solucao.desperdicioMg());
-        otimizacao.setEconomiaVsEmpirico(custoSemCompartilhar.subtract(custoOtimizado));
+        Otimizacao otimizacao = new Otimizacao(medicamento, data, custoOtimizado, solucao.desperdicioMg(),
+                custoSemCompartilhar.subtract(custoOtimizado));
         for (Alocacao a : solucao.alocacoes()) {
-            AlocacaoFrasco alocacao = new AlocacaoFrasco();
-            alocacao.setOtimizacao(otimizacao);
-            alocacao.setPrescricao(prescricoes.get(a.paciente()));
-            alocacao.setApresentacao(frascos.get(a.tipo()));
-            alocacao.setNumeroFrasco(a.numero() + 1);
-            alocacao.setFracao(a.fracao());
-            otimizacao.getAlocacoes().add(alocacao);
+            otimizacao.adicionarAlocacao(prescricoes.get(a.paciente()), frascos.get(a.tipo()),
+                    a.numero() + 1, a.fracao());
         }
         return otimizacaoRepository.save(otimizacao);
     }

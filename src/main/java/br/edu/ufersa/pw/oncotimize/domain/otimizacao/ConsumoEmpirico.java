@@ -3,16 +3,18 @@ package br.edu.ufersa.pw.oncotimize.domain.otimizacao;
 import br.edu.ufersa.pw.oncotimize.domain.frascos.Frascos;
 import br.edu.ufersa.pw.oncotimize.domain.medicamento.Medicamento;
 import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.Getter;
-import lombok.Setter;
+import lombok.NoArgsConstructor;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
+// Só leitura por ora: nada grava consumo empírico (tabela da V3, à espera do registro diário da farmácia).
 @Getter
-@Setter
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
 @Table(name = "consumo_empirico",
         uniqueConstraints = @UniqueConstraint(

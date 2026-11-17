@@ -23,33 +23,7 @@ public class AuthService {
             throw new RecursoDuplicadoException("Auth", "username", username);
         }
 
-        Auth auth = new Auth();
-        auth.setUsername(username);
-        auth.setPassword(passwordEncoder.encode(rawPassword)); // Codifica corretamente a senha
-
-        return authRepository.save(auth);
-    }
-
-    // Atualizar a senha de um usuário
-    public String updatePassword(UUID authId, String rawPassword) {
-        Auth auth = authRepository.findById(authId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Credenciais", authId));
-        auth.setPassword(passwordEncoder.encode(rawPassword)); // Codifica corretamente a senha
-        authRepository.save(auth);
-        return "Senha atualizada.";
-    }
-
-    // Atualizar o nome de usuário
-    public String updateUsername(UUID authId, String newUsername) {
-        Auth auth = authRepository.findById(authId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Credenciais", authId));
-        if (authRepository.existsByUsername(newUsername)
-                && !authRepository.findByUsername(newUsername).get().getId().equals(authId)) {
-            throw new RecursoDuplicadoException("Auth", "username", newUsername);
-        }
-        auth.setUsername(newUsername);
-        authRepository.save(auth);
-        return "Nome de usuário atualizado.";
+        return authRepository.save(new Auth(username, passwordEncoder.encode(rawPassword)));
     }
 
     // Buscar credenciais por nome de usuário

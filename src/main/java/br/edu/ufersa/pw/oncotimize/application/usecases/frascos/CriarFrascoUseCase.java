@@ -32,13 +32,8 @@ public class CriarFrascoUseCase {
         Medicamento medicamento = medicamentoRepository.findById(medicamentoId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Medicamento", medicamentoId));
 
-        Frascos frasco = new Frascos();
-        frasco.setMedicamento(medicamento);
-        frasco.setVolumeMg(request.getVolumeMg());
-        frasco.setCusto(request.getCusto());
-        frasco.setQuantidadeEstoque(request.getQuantidadeEstoque());
-        frasco.setDescricaoTasy(request.getDescricaoTasy());
-
+        Frascos frasco = new Frascos(medicamento, request.getVolumeMg(), request.getCusto(),
+                request.getQuantidadeEstoque(), request.getDescricaoTasy());
         return frascosRepository.save(frasco);
     }
 }
