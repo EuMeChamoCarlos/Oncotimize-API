@@ -14,6 +14,7 @@ import java.time.Instant;
 import java.util.Map;
 import java.util.stream.Collectors;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -129,6 +130,16 @@ public class GlobalExceptionHandler {
     public ProblemDetail handleTypeMismatch(MethodArgumentTypeMismatchException ex) {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.BAD_REQUEST, "Parâmetro '" + ex.getName() + "' com valor inválido!");
+        problem.setTitle("Erro de leitura da requisição");
+        problem.setProperty("timestamp", Instant.now());
+        return problem;
+    }
+
+    /** ?sort= com campo que não existe na entidade (ex: GET /api/otimizacoes?...&sort=foo): erro do cliente, não 500. */
+    @ExceptionHandler(PropertyReferenceException.class)
+    public ProblemDetail handleOrdenacaoInvalida(PropertyReferenceException ex) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(
+                HttpStatus.BAD_REQUEST, "Não é possível ordenar por '" + ex.getPropertyName() + "'!");
         problem.setTitle("Erro de leitura da requisição");
         problem.setProperty("timestamp", Instant.now());
         return problem;

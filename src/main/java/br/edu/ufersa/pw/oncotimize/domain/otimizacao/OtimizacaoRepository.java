@@ -1,6 +1,8 @@
 package br.edu.ufersa.pw.oncotimize.domain.otimizacao;
 
 import jakarta.persistence.LockModeType;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
@@ -15,7 +17,7 @@ import java.util.UUID;
 @Repository
 public interface OtimizacaoRepository extends JpaRepository<Otimizacao, UUID> {
 
-    List<Otimizacao> findByMedicamentoIdAndDataReferenciaOrderByCreatedAtDesc(UUID medicamentoId, LocalDate dataReferencia);
+    Page<Otimizacao> findByMedicamentoIdAndDataReferencia(UUID medicamentoId, LocalDate dataReferencia, Pageable pageable);
 
     /** Trava a linha (SELECT ... FOR UPDATE) até o fim da transação: serializa confirmações. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)

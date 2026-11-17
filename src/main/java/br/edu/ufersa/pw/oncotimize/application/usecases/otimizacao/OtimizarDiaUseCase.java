@@ -1,6 +1,7 @@
 package br.edu.ufersa.pw.oncotimize.application.usecases.otimizacao;
 
 import br.edu.ufersa.pw.oncotimize.domain.exception.EstoqueInsuficienteException;
+import br.edu.ufersa.pw.oncotimize.domain.exception.RecursoDuplicadoException;
 import br.edu.ufersa.pw.oncotimize.domain.exception.RecursoNaoEncontradoException;
 import br.edu.ufersa.pw.oncotimize.domain.frascos.Frascos;
 import br.edu.ufersa.pw.oncotimize.domain.frascos.FrascosRepository;
@@ -8,6 +9,7 @@ import br.edu.ufersa.pw.oncotimize.domain.medicamento.Medicamento;
 import br.edu.ufersa.pw.oncotimize.domain.medicamento.MedicamentoRepository;
 import br.edu.ufersa.pw.oncotimize.domain.otimizacao.Otimizacao;
 import br.edu.ufersa.pw.oncotimize.domain.otimizacao.OtimizacaoRepository;
+import br.edu.ufersa.pw.oncotimize.domain.otimizacao.StatusOtimizacao;
 import br.edu.ufersa.pw.oncotimize.domain.prescricao.Prescricao;
 import br.edu.ufersa.pw.oncotimize.domain.prescricao.PrescricaoRepository;
 import br.edu.ufersa.pw.oncotimize.domain.prescricao.StatusPrescricao;
@@ -51,6 +53,12 @@ public class OtimizarDiaUseCase {
     public Otimizacao executar(UUID medicamentoId, LocalDate data) {
         Medicamento medicamento = medicamentoRepository.findById(medicamentoId)
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Medicamento", medicamentoId));
+        // Preparo do dia já confirmado: um plano novo nunca poderia ser confirmado (ConfirmarOtimizacaoUseCase
+        // recusa o segundo com o mesmo 409). Falha aqui, antes de rodar o solver.
+        if (otimizacaoRepository.existsByMedicamentoIdAndDataReferenciaAndStatus(
+                medicamentoId, data, StatusOtimizacao.CONFIRMADA)) {
+            throw new RecursoDuplicadoException("Plano confirmado", "medicamento e data", data.toString());
+        }
 
         List<Prescricao> prescricoes = prescricaoRepository.buscarDoDia(medicamentoId, data, StatusPrescricao.APTO);
         if (prescricoes.isEmpty()) {
