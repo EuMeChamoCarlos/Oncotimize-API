@@ -103,4 +103,12 @@ public class Prescricao {
         this.status = status;
         this.dataPrescricao = dataPrescricao;
     }
+
+    /**
+     * O médico avaliou o paciente como não apto: a linha sai da otimização. Dose e data de emissão ficam (mudar a data
+     * ocuparia a chave aplicação+medicamento+data que a prescrição de retorno usa); o paciente volta com outra prescrição.
+     */
+    public void marcarNaoApto() {
+        atualizar(doseMg, StatusPrescricao.NAO_APTO, dataPrescricao);
+    }
 }
