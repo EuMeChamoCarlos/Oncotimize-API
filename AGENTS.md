@@ -19,7 +19,7 @@ Spring Boot 4.1.1 backend (oncotimizeAPI; projeto renomeado de OncoDose em 2026-
 
 ## Architecture rules (Prof. Gadelha, v1+v2 merged)
 - `DomainException extends RuntimeException` in `domain.exception`, fail-fast with rich context. Never `ResponseStatusException` in business code, never `catch (Exception)` swallowing.
-- `GlobalExceptionHandler` (`application.api.exception`) returns RFC 7807 `ProblemDetail` + `timestamp`; never 200-with-error, never leak stacktrace.
+- `GlobalExceptionHandler` (`application.api.exception`) returns RFC 9457 `ProblemDetail` (a 9457 substituiu a 7807; mesmo formato) + `timestamp`; never 200-with-error, never leak stacktrace.
 - UseCases in `application.usecases` own `@Transactional`; `domain.services` is pure logic with zero infra; controllers are thin (`@Valid` DTO → UseCase → `ResponseEntity` 200/201+`Location`/204). No Repository injection in controllers.
 - Responses return a typed DTO record (`XxxResponse.fromXxx(entity)`) directly, never the `@Entity` and never an envelope; lists return `PagedModel<XxxResponse>`. No MapStruct yet, no `/api/v1` yet.
 
