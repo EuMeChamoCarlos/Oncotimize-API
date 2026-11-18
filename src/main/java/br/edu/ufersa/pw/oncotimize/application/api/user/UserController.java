@@ -22,6 +22,8 @@ public class UserController {
     private final RegistrarUsuarioUseCase registrarUsuarioUseCase;
     private final GerenciarUsuarioUseCase gerenciarUsuarioUseCase;
 
+    /** Só ADMIN cadastra: autocadastro dava ROLE_USER a qualquer um, com leitura de prescrições e agenda. */
+    @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
     public ResponseEntity<AuthenticatedUserResponse> register(@Valid @RequestBody UserRegistrationRequest user) {
         User criado = registrarUsuarioUseCase.executar(user);

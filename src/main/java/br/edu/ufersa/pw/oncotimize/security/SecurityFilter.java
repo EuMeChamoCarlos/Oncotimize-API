@@ -33,11 +33,12 @@ public class SecurityFilter {
                 .cors(cors -> cors.configurationSource(CorsConfig.corsConfigurationSource()))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/error").anonymous()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/users").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/medicamentos").permitAll()
+                        // Único endpoint público: cadastro de usuário é só ADMIN (UserController)
+                        .requestMatchers(HttpMethod.POST, "/api/auth/login").permitAll()
                         .anyRequest().authenticated())
                 .sessionManagement(sessionManagement -> sessionManagement
                         .sessionCreationPolicy(SessionCreationPolicy.STATELESS));
+        http.addFilterBefore(new LoginRateLimitFilter(), UsernamePasswordAuthenticationFilter.class);
         http.addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }

@@ -13,6 +13,7 @@ import br.edu.ufersa.pw.oncotimize.domain.exception.RecursoNaoEncontradoExceptio
 import java.time.Instant;
 import java.util.Map;
 import java.util.stream.Collectors;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.core.PropertyReferenceException;
 import org.springframework.http.HttpStatus;
@@ -26,6 +27,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
@@ -153,6 +155,8 @@ public class GlobalExceptionHandler {
             problem.setProperty("timestamp", Instant.now());
             return problem;
         }
+        // O cliente recebe só a mensagem genérica; o stacktrace fica no log do servidor.
+        log.error("Erro interno não tratado", ex);
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(
                 HttpStatus.INTERNAL_SERVER_ERROR, "Erro interno inesperado!");
         problem.setTitle("Erro interno");
