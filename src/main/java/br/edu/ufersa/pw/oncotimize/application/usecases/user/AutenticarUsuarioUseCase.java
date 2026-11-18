@@ -2,6 +2,7 @@ package br.edu.ufersa.pw.oncotimize.application.usecases.user;
 
 import br.edu.ufersa.pw.oncotimize.domain.exception.CredenciaisInvalidasException;
 import br.edu.ufersa.pw.oncotimize.infrastructure.jwt.JwtGenerator;
+import br.edu.ufersa.pw.oncotimize.infrastructure.services.utils.StringSanitizer;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
@@ -26,7 +27,8 @@ public class AutenticarUsuarioUseCase {
     public String executar(String username, String password) {
         try {
             Authentication authentication = authenticationManager.authenticate(
-                    new UsernamePasswordAuthenticationToken(username, password));
+                    // Mesma normalização do cadastro (RegistrarUsuarioUseCase), senão "Joao@X.com" nunca entra.
+                    new UsernamePasswordAuthenticationToken(StringSanitizer.sanitizeString(username), password));
             return jwtGenerator.generateToken(authentication);
         } catch (AuthenticationException e) {
             throw new CredenciaisInvalidasException();

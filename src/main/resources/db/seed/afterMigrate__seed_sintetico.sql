@@ -263,3 +263,23 @@ JOIN protocolo_medicamento pm ON pm.protocolo_id = p.id
 WHERE p.codigo_protocolo BETWEEN 'PTC2027-000101' AND 'PTC2027-000110'
   AND a.data_prevista IN (DATE '2027-06-21', DATE '2027-06-22')
 ON CONFLICT DO NOTHING;
+
+-- Admin de desenvolvimento (FICTÍCIO). Desde 17/11 só ADMIN cadastra usuário, então um banco novo
+-- precisa de um primeiro admin para usar a API.
+--   login: admin@oncotimize.test   senha: admin-dev-oncotimize   (hash BCrypt abaixo, custo 10)
+-- Credencial de teste, só do profile dev: nunca subir o profile dev contra um banco real.
+INSERT INTO auths (username, password)
+VALUES ('admin@oncotimize.test', '$2a$10$Ehawdr69fAezUpkmfOnYEeJB2eslvfdW3UpwK2/6UoktnSYsH6pZK')
+ON CONFLICT (username) DO NOTHING;
+
+WITH a AS (
+    SELECT au.id FROM auths au
+    WHERE au.username = 'admin@oncotimize.test'
+      AND NOT EXISTS (SELECT 1 FROM users u WHERE u.auth_id = au.id)
+), p AS (
+    INSERT INTO profiles (name) SELECT 'Administrador (dev)' FROM a RETURNING id
+)
+INSERT INTO users (status, auth_id, profile_id, role_id)
+SELECT 'ACTIVE', a.id, p.id, r.id
+FROM a, p, roles r
+WHERE r.name = 'ADMIN';
