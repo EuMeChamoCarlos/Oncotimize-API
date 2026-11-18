@@ -15,8 +15,9 @@ public final class SugestaoDtos {
 
     private SugestaoDtos() {}
 
+    /** Sem medicamentoId, o planejador considera todos os medicamentos de uma vez. */
     public record GerarSugestoesRequest(
-            @NotNull(message = "O medicamento é obrigatório") UUID medicamentoId,
+            UUID medicamentoId,
             @NotNull(message = "O início é obrigatório") LocalDate inicio,
             @NotNull(message = "O fim é obrigatório") LocalDate fim) {}
 
