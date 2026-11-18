@@ -35,10 +35,10 @@ public class AgendaController {
     private final AceitarSugestaoUseCase aceitarSugestaoUseCase;
     private final RecusarSugestaoUseCase recusarSugestaoUseCase;
 
-    /** Só leitura: roda o planejador sobre a agenda atual sem gravar nada. */
+    /** Só leitura: roda o planejador sobre a agenda atual sem gravar nada. Sem medicamentoId, todos. */
     @GetMapping("/sugestoes/previa")
     public ResponseEntity<PreviaAgendaResponse> previa(
-            @RequestParam UUID medicamentoId,
+            @RequestParam(required = false) UUID medicamentoId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate inicio,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate fim) {
         return ResponseEntity.ok(PreviaAgendaResponse.fromPrevia(preverSugestoesUseCase.executar(medicamentoId, inicio, fim)));

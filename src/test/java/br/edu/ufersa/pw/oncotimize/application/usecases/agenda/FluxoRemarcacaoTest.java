@@ -62,6 +62,7 @@ class FluxoRemarcacaoTest {
     @Autowired private SugestaoRemarcacaoRepository sugestaoRepository;
     @Autowired private ListarAplicacoesDoDiaUseCase listarAplicacoesDoDia;
     @Autowired private PreverSugestoesUseCase preverSugestoes;
+    @Autowired private GerarSugestoesUseCase gerarSugestoes;
     @Autowired private OtimizarDiaUseCase otimizarDia;
     @Autowired private RecusarOtimizacaoUseCase recusarOtimizacao;
     @Autowired private ConfirmarOtimizacaoUseCase confirmarOtimizacao;
@@ -124,6 +125,34 @@ class FluxoRemarcacaoTest {
 
         assertThat(preverSugestoes.executar(outro.getId(), ORIGEM.minusDays(2), ORIGEM.plusDays(3)).sugestoes())
                 .noneMatch(s -> s.aplicacaoId().equals(x.getId()));
+    }
+
+    /**
+     * Busca sem medicamento: todos de uma vez. A aplicação X (A 30 mg + B 100 mg, janela +1) cabe nas sobras do dia
+     * seguinte (A: 260 de 300; B: 900 de 1000). Sozinha custa 190 + 100; junto, zero a mais: uma sugestão só, ganho 290.
+     */
+    @Test
+    void buscaEmTodosOsMedicamentosSugereAAplicacaoUmaVezSo() {
+        Medicamento a = medicamentoRepository.save(Medicamento.builder("Teste todos A").build());
+        Medicamento b = medicamentoRepository.save(Medicamento.builder("Teste todos B").build());
+        frascosRepository.save(new Frascos(a, 300.0, 190.0, 20, null));
+        frascosRepository.save(new Frascos(b, 1000.0, 100.0, 20, null));
+        LocalDate dia = LocalDate.of(2031, 6, 2);
+        Aplicacao x = protocoloRepository.save(ProtocoloPaciente.novo("PTC9999-000050", "AC", null, dia, 1, 21, 0, 0, 1,
+                List.of(new MedicamentoNovo(a, 30.0, "IV", "D1"), new MedicamentoNovo(b, 100.0, "IV", "D1"))))
+                .getAplicacoes().get(0);
+        protocoloRepository.save(ProtocoloPaciente.novo("PTC9999-000051", "TAX", null, dia.plusDays(1), 1, 21, 0, 0, 0,
+                List.of(new MedicamentoNovo(a, 260.0, "IV", "D1"))));
+        protocoloRepository.save(ProtocoloPaciente.novo("PTC9999-000052", "CICLO", null, dia.plusDays(1), 1, 21, 0, 0, 0,
+                List.of(new MedicamentoNovo(b, 900.0, "IV", "D1"))));
+
+        List<SugestaoRemarcacao> sugestoes = gerarSugestoes.executar(null, dia, dia.plusDays(6));
+
+        assertThat(sugestoes).singleElement().satisfies(s -> {
+            assertThat(s.getAplicacao().getId()).isEqualTo(x.getId());
+            assertThat(s.getDataDestino()).isEqualTo(dia.plusDays(1));
+            assertThat(s.getEconomiaEstimada().doubleValue()).isCloseTo(290, within(1e-6));
+        });
     }
 
     /** Lacuna (b): registrar o não apto tira o paciente da otimização do dia, sem esperar o aceite da sugestão. */

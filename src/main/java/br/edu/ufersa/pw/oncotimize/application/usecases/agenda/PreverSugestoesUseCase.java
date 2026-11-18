@@ -39,7 +39,7 @@ import org.springframework.transaction.annotation.Transactional;
  * Caso de uso: prévia da agenda (só leitura). Monta o cenário do banco e roda o planejador sem gravar nada;
  * {@link GerarSugestoesUseCase} grava as sugestões para decisão.
  *
- * <p>O medicamento escolhe quais aplicações podem se mover; a aplicação se move inteira, e o ganho conta
+ * <p>O medicamento (ou todos, se omitido) escolhe quais aplicações podem se mover; a aplicação se move inteira, e o ganho conta
  * todos os quimioterápicos intravenosos dela. Para isso entram também os outros pacientes desses
  * medicamentos no período. Dose de cada medicamento: a da linha da prescrição do dia agendado, se houver;
  * senão, a do protocolo. Prescrição NAO_APTO do dia agendado tira a aplicação do custo e da remarcação.
@@ -79,21 +79,24 @@ public class PreverSugestoesUseCase {
         this.sugestaoRepository = sugestaoRepository;
     }
 
+    /** medicamentoId nulo = todos os medicamentos, num só planejamento (a aplicação do AC não é avaliada duas vezes). */
     @Transactional(readOnly = true)
     public Previa executar(UUID medicamentoId, LocalDate inicio, LocalDate fim) {
         if (fim.isBefore(inicio) || ChronoUnit.DAYS.between(inicio, fim) >= MAX_DIAS) {
             throw new PeriodoInvalidoException(inicio, fim, "fim deve ser >= início e o período ter até " + MAX_DIAS + " dias");
         }
-        if (!medicamentoRepository.existsById(medicamentoId)) {
+        if (medicamentoId != null && !medicamentoRepository.existsById(medicamentoId)) {
             throw new RecursoNaoEncontradoException("Medicamento", medicamentoId);
         }
 
-        Cenario cenario = montarCenario(Set.of(medicamentoId), inicio, fim);
-        // Só se movem as aplicações que têm o medicamento pedido; as outras entram como demanda dos seus dias.
+        Set<UUID> medicamentos = medicamentoId != null ? Set.of(medicamentoId)
+                : medicamentoRepository.findAll().stream().map(m -> m.getId()).collect(Collectors.toSet());
+        Cenario cenario = montarCenario(medicamentos, inicio, fim);
+        // Com medicamento: só se movem as aplicações que o têm; as outras entram como demanda dos seus dias.
         List<AplicacaoPlanejada> aplicacoes = cenario.aplicacoes().stream()
                 .map(a -> new AplicacaoPlanejada(a.id(), a.protocoloId(), a.codigoProtocolo(), a.numero(), a.doses(),
                         a.data(), a.inicioJanela(), a.fimJanela(), a.intervaloMinimoDias(),
-                        a.movivel() && a.doses().containsKey(medicamentoId)))
+                        a.movivel() && (medicamentoId == null || a.doses().containsKey(medicamentoId))))
                 .toList();
 
         long t0 = System.nanoTime();
