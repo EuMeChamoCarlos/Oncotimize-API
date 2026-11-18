@@ -48,17 +48,25 @@ public class OtimizarDiaUseCase {
         this.otimizacaoRepository = otimizacaoRepository;
     }
 
-    // ponytail: agrupa por dia inteiro (como o artigo); janela de estabilidade (~2h) ou lote escolhido entram aqui
     @Transactional
     public Otimizacao executar(UUID medicamentoId, LocalDate data) {
-        Medicamento medicamento = medicamentoRepository.findById(medicamentoId)
-                .orElseThrow(() -> new RecursoNaoEncontradoException("Medicamento", medicamentoId));
         // Preparo do dia já confirmado: um plano novo nunca poderia ser confirmado (ConfirmarOtimizacaoUseCase
         // recusa o segundo com o mesmo 409). Falha aqui, antes de rodar o solver.
         if (otimizacaoRepository.existsByMedicamentoIdAndDataReferenciaAndStatus(
                 medicamentoId, data, StatusOtimizacao.CONFIRMADA)) {
             throw new RecursoDuplicadoException("Plano confirmado", "medicamento e data", data.toString());
         }
+        return otimizacaoRepository.save(montar(medicamentoId, data));
+    }
+
+    /**
+     * Calcula o plano sem gravar (a prévia do painel usa o mesmo cálculo, então os números batem com o plano gerado).
+     * Quem chama precisa de uma transação: a entidade aponta para prescrições e frascos carregados.
+     */
+    // ponytail: agrupa por dia inteiro (como o artigo); janela de estabilidade (~2h) ou lote escolhido entram aqui
+    public Otimizacao montar(UUID medicamentoId, LocalDate data) {
+        Medicamento medicamento = medicamentoRepository.findById(medicamentoId)
+                .orElseThrow(() -> new RecursoNaoEncontradoException("Medicamento", medicamentoId));
 
         List<Prescricao> prescricoes = prescricaoRepository.buscarDoDia(medicamentoId, data, StatusPrescricao.APTO);
         if (prescricoes.isEmpty()) {
@@ -88,7 +96,7 @@ public class OtimizarDiaUseCase {
             otimizacao.adicionarAlocacao(prescricoes.get(a.paciente()), frascos.get(a.tipo()),
                     a.numero() + 1, a.fracao());
         }
-        return otimizacaoRepository.save(otimizacao);
+        return otimizacao;
     }
 
     private static BigDecimal dinheiro(double valor) {

@@ -28,9 +28,10 @@ public class BuscarOtimizacaoUseCase {
                 .orElseThrow(() -> new RecursoNaoEncontradoException("Otimização", otimizacaoId));
     }
 
-    /** Planos de um medicamento num dia (o front abre o plano do dia por aqui). Lista vazia não é erro. */
+    /** Planos do dia, de um medicamento ou (medicamentoId nulo) de todos. Lista vazia não é erro. */
     @Transactional(readOnly = true)
     public Page<Otimizacao> listar(UUID medicamentoId, LocalDate data, Pageable pageable) {
-        return otimizacaoRepository.findByMedicamentoIdAndDataReferencia(medicamentoId, data, pageable);
+        return medicamentoId == null ? otimizacaoRepository.findByDataReferencia(data, pageable)
+                : otimizacaoRepository.findByMedicamentoIdAndDataReferencia(medicamentoId, data, pageable);
     }
 }

@@ -19,6 +19,9 @@ public interface OtimizacaoRepository extends JpaRepository<Otimizacao, UUID> {
 
     Page<Otimizacao> findByMedicamentoIdAndDataReferencia(UUID medicamentoId, LocalDate dataReferencia, Pageable pageable);
 
+    /** Todos os planos do dia (painel do plano do dia). */
+    Page<Otimizacao> findByDataReferencia(LocalDate dataReferencia, Pageable pageable);
+
     /** Trava a linha (SELECT ... FOR UPDATE) até o fim da transação: serializa confirmações. */
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     Optional<Otimizacao> findWithLockById(UUID id);

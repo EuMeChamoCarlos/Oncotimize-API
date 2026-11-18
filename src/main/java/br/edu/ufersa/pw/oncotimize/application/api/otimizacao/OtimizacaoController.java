@@ -2,6 +2,9 @@ package br.edu.ufersa.pw.oncotimize.application.api.otimizacao;
 
 import br.edu.ufersa.pw.oncotimize.application.api.otimizacao.dto.OtimizacaoResponse;
 import br.edu.ufersa.pw.oncotimize.application.api.otimizacao.dto.OtimizarRequest;
+import br.edu.ufersa.pw.oncotimize.application.api.otimizacao.dto.PlanoPrevioResponse;
+import br.edu.ufersa.pw.oncotimize.application.usecases.otimizacao.PreverPlanoDoDiaUseCase;
+import java.util.List;
 import br.edu.ufersa.pw.oncotimize.application.usecases.otimizacao.BuscarOtimizacaoUseCase;
 import br.edu.ufersa.pw.oncotimize.application.usecases.otimizacao.ConfirmarOtimizacaoUseCase;
 import br.edu.ufersa.pw.oncotimize.application.usecases.otimizacao.OtimizarDiaUseCase;
@@ -33,6 +36,7 @@ public class OtimizacaoController {
     private final BuscarOtimizacaoUseCase buscarOtimizacaoUseCase;
     private final ConfirmarOtimizacaoUseCase confirmarOtimizacaoUseCase;
     private final RecusarOtimizacaoUseCase recusarOtimizacaoUseCase;
+    private final PreverPlanoDoDiaUseCase preverPlanoDoDiaUseCase;
 
     @PreAuthorize("hasRole('ADMIN')")
     @PostMapping
@@ -45,14 +49,22 @@ public class OtimizacaoController {
         return ResponseEntity.created(location).body(OtimizacaoResponse.fromOtimizacao(criada));
     }
 
-    /** Planos de um medicamento num dia, o mais recente primeiro; lista vazia se ainda não houve otimização. */
+    /** Planos do dia (de um medicamento ou de todos), o mais recente primeiro; lista vazia se ainda não houve otimização. */
     @GetMapping
     public ResponseEntity<PagedModel<OtimizacaoResponse>> listar(
-            @RequestParam UUID medicamentoId,
+            @RequestParam(required = false) UUID medicamentoId,
             @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate data,
             @PageableDefault(sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable) {
         return ResponseEntity.ok(new PagedModel<>(buscarOtimizacaoUseCase.listar(medicamentoId, data, pageable)
                 .map(OtimizacaoResponse::fromOtimizacao)));
+    }
+
+    /** Só leitura: o plano de cada medicamento com paciente apto no dia, calculado na hora e sem gravar. */
+    @GetMapping("/previa")
+    public ResponseEntity<List<PlanoPrevioResponse>> previa(
+            @RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate data) {
+        return ResponseEntity.ok(preverPlanoDoDiaUseCase.executar(data).stream()
+                .map(PlanoPrevioResponse::fromPlanoPrevio).toList());
     }
 
     @GetMapping("/{otimizacaoId}")
