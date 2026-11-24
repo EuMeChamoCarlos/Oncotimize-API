@@ -9,6 +9,7 @@ import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
+import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.servlet.HandlerExceptionResolver;
 
 @Configuration
@@ -23,14 +24,15 @@ public class SecurityFilter {
     }
 
     @Bean
-    public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain securityFilterChain(HttpSecurity http,
+                                                   @Qualifier("corsConfigurationSource") CorsConfigurationSource corsSource) throws Exception {
         http
                 // 401/403 do filter chain viram ProblemDetail pelo GlobalExceptionHandler
                 .exceptionHandling(ex -> ex
                         .authenticationEntryPoint((req, res, e) -> resolver.resolveException(req, res, null, e))
                         .accessDeniedHandler((req, res, e) -> resolver.resolveException(req, res, null, e)))
                 .csrf(csrf -> csrf.disable())
-                .cors(cors -> cors.configurationSource(CorsConfig.corsConfigurationSource()))
+                .cors(cors -> cors.configurationSource(corsSource))
                 .authorizeHttpRequests(authorize -> authorize
                         .requestMatchers("/error").anonymous()
                         // Único endpoint público: cadastro de usuário é só ADMIN (UserController)
